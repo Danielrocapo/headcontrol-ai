@@ -1,0 +1,196 @@
+﻿<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HeadControl AI</title>
+  <script src="/static/tf.min.js"></script>
+  <script src="/static/teachablemachine-pose.min.js"></script>
+  <style>
+    :root { color-scheme: dark; font-family: "Segoe UI", sans-serif; }
+    body { margin: 0; background: #10131a; color: #edf1fa; }
+    main { max-width: 720px; margin: auto; padding: 28px 24px; text-align: center; }
+    h1 { margin: 0 0 8px; font-size: 30px; }
+    p { color: #aeb9cc; line-height: 1.5; }
+    .camera { background: #07090e; min-height: 320px; border: 1px solid #30394b;
+      border-radius: 14px; display: grid; place-items: center; overflow: hidden; }
+    canvas { display: block; max-width: 100%; height: auto; }
+    .metrics { display: flex; justify-content: center; gap: 48px; padding: 20px; }
+    .metrics small { display: block; color: #aeb9cc; margin-bottom: 8px; }
+    .metrics strong { font-size: 24px; }
+    button { padding: 12px 24px; border: 0; border-radius: 8px; cursor: pointer;
+      font-size: 16px; font-weight: 600; margin: 4px; }
+    #start { background: #81c9ff; color: #071421; }
+    #pause { background: #323d51; color: #fff; }
+    button:disabled { opacity: .45; cursor: default; }
+    #error { background: #44242a; color: #ffced2; padding: 14px; border-radius: 8px; }
+    #status { min-height: 24px; }
+    .hint { font-size: 13px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>HeadControl AI</h1>
+  <p>Control local del mouse mediante movimientos de cabeza</p>
+  <div class="camera" id="camera"><p>La cámara se activa al iniciar.</p></div>
+  <div class="metrics" aria-live="polite">
+    <div><small>Clase detectada</small><strong id="direction">—</strong></div>
+    <div><small>Confianza</small><strong id="confidence">0.0 %</strong></div>
+  </div>
+  <button id="start">Iniciar control</button>
+  <button id="pause" disabled>Pausar (Esc)</button>
+  <p id="status" role="status">Listo para iniciar.</p>
+  <p id="error" role="alert" hidden></p>
+  <p class="hint">Velocidad máxima: __VELOCIDAD__ px/s · micropasos cada __INTERVALO__ ms · arranque gradual.<br>
+    Umbral: 85 % · mínimo 3 frames · zona muerta temporal: __ZONA_MUERTA__ ms.<br>
+    CENTRO detiene inmediatamente. Esc pausa el control en esta ventana.<br>
+    Lleva el cursor a una esquina para activar el FailSafe de PyAutoGUI.</p>
+</main>
+<script>
+"use strict";
+const TOKEN = "__CONTROL_TOKEN__";
+const CLASSES = ["CENTRO", "IZQUIERDA", "DERECHA", "ARRIBA", "ABAJO"];
+const ui = Object.fromEntries(["camera", "direction", "confidence", "start", "pause", "status", "error"]
+  .map(id => [id, document.getElementById(id)]));
+let model = null, webcam = null, running = false, busy = false, generation = 0;
+let loopPromise = Promise.resolve();
+
+async function api(path, payload) {
+  const response = await fetch(path, {
+    method: "POST", headers: {"Content-Type": "application/json", "X-Control-Token": TOKEN},
+    body: JSON.stringify(payload), signal: AbortSignal.timeout(5000)
+  });
+  const data = await response.json();
+  if (!response.ok || !data.ok) throw new Error(data.error || "Error del servidor local.");
+  return data;
+}
+
+function showError(error) {
+  ui.error.textContent = error.message || String(error);
+  ui.error.hidden = false;
+}
+
+function stopCamera(camera) {
+  if (camera && camera.webcam && camera.webcam.srcObject) camera.stop();
+}
+
+function releaseCamera() {
+  stopCamera(webcam);
+  webcam = null;
+}
+
+async function pauseControl() {
+  running = false;
+  generation++;
+  releaseCamera();
+  ui.pause.disabled = true;
+  ui.start.disabled = true;
+  ui.status.textContent = "Control pausado. Cámara apagada.";
+  try { await api("/control", {enabled: false}); }
+  catch (error) { showError(error); }
+  await loopPromise;
+  if (!busy) ui.start.disabled = false;
+}
+window.pauseControl = pauseControl;
+
+async function startControl() {
+  if (running || busy) return;
+  busy = true;
+  const session = ++generation;
+  ui.start.disabled = true;
+  ui.pause.disabled = false;
+  ui.error.hidden = true;
+  let stage = "modelo";
+  try {
+    await api("/control", {enabled: false});
+    ui.status.textContent = "Cargando modelo local y PoseNet…";
+    if (!window.tf || !window.tmPose) throw new Error("Faltan las librerías JavaScript locales en static/.");
+    if (!model) {
+      model = await tmPose.load("/model/model.json", "/model/metadata.json");
+      const labels = model.getClassLabels();
+      if (labels.length !== 5 || CLASSES.some(label => !labels.includes(label))) {
+        throw new Error("Las clases del modelo no coinciden con las cinco clases esperadas.");
+      }
+    }
+    if (session !== generation) return;
+    stage = "cámara";
+    ui.status.textContent = "Abriendo cámara…";
+    const camera = new tmPose.Webcam(400, 400, true);
+    await camera.setup({facingMode: "user"});
+    if (session !== generation) { stopCamera(camera); return; }
+    webcam = camera;
+    camera.webcam.muted = true;
+    camera.webcam.playsInline = true;
+    await camera.play();
+    if (session !== generation) { stopCamera(camera); return; }
+    ui.camera.replaceChildren(camera.canvas);
+    const track = camera.webcam.srcObject.getVideoTracks()[0];
+    track.addEventListener("ended", () => {
+      if (running) { showError(new Error("La cámara se desconectó.")); void pauseControl(); }
+    });
+    await api("/control", {enabled: true});
+    if (session !== generation) { await api("/control", {enabled: false}); return; }
+    running = true;
+    ui.status.textContent = "Control activo. Mantén la cabeza en CENTRO para detener el cursor.";
+    loopPromise = loop(session, camera);
+  } catch (error) {
+    showError(new Error(`Error de ${stage}: ${error.message || error}. Revisa los archivos locales y el permiso de cámara de Windows.`));
+    await pauseControl();
+  } finally {
+    busy = false;
+    if (!running) { releaseCamera(); ui.start.disabled = false; ui.pause.disabled = true; }
+  }
+}
+
+async function loop(session, camera) {
+  try {
+    while (running && session === generation) {
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      if (!running || session !== generation) break;
+      const video = camera.webcam;
+      if (!video.srcObject || video.srcObject.getVideoTracks().some(t => t.readyState !== "live")) {
+        throw new Error("La cámara dejó de enviar imágenes.");
+      }
+      if (video.readyState < 2) continue;
+      const frameTime = video.currentTime;
+      if (frameTime === camera.lastFrameTime) continue;
+      camera.lastFrameTime = frameTime;
+      camera.update();
+      const {pose, posenetOutput} = await model.estimatePose(camera.canvas);
+      if (!running || session !== generation) break;
+      const predictions = await model.predict(posenetOutput);
+      if (!running || session !== generation) break;
+      const best = predictions.reduce((a, b) => b.probability > a.probability ? b : a);
+      ui.direction.textContent = best.className;
+      ui.confidence.textContent = `${(best.probability * 100).toFixed(1)} %`;
+      const confidence = pose ? best.probability : 0;
+      const centerConfidence = predictions.find(p => p.className === "CENTRO")?.probability || 0;
+      // Una sola petición pendiente: sin cola de movimientos acumulados.
+      const result = await api("/prediction", {direction: best.className, confidence, centerConfidence});
+      if (!running || session !== generation) break;
+      if (result.paused) throw new Error("Control detenido. Vuelve a iniciar cuando estés listo.");
+      ui.status.textContent = !pose ? "No se detecta una persona. Cursor detenido."
+        : result.state === "center" ? "CENTRO · cursor detenido."
+        : result.state === "deadzone" ? "Zona muerta o confianza insuficiente. Cursor detenido."
+        : result.state === "confirming" ? `Confirmando dirección estable: ${result.stable}/3 frames…`
+        : "Movimiento suave activo.";
+    }
+  } catch (error) {
+    running = false;
+    generation++;
+    releaseCamera();
+    showError(error);
+    ui.status.textContent = "Control detenido por un error.";
+    try { await api("/control", {enabled: false}); } catch (stopError) { showError(stopError); }
+    ui.start.disabled = false;
+    ui.pause.disabled = true;
+  }
+}
+
+ui.start.addEventListener("click", startControl);
+ui.pause.addEventListener("click", () => void pauseControl());
+document.addEventListener("keydown", event => { if (event.key === "Escape") void pauseControl(); });
+window.addEventListener("pagehide", releaseCamera);
+</script>
+</body>
+</html>
