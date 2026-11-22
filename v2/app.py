@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QApplication, QCheckBox, QFrame, QHBoxLayout, QLabel, QMainWindow,
     QMessageBox, QPushButton, QSlider, QVBoxLayout, QWidget
 )
-from engine import HeadController, MouthScrollToggle, WinkDetector, relative_pose
+from engine import HeadController, MouthScrollToggle, WinkDetector, LongBlinkDetector, relative_pose
 
 
 ROOT = Path(__file__).resolve().parent
@@ -105,6 +105,7 @@ class MainWindow(QMainWindow):
         self.resize(920, 760)
         self.head = HeadController()
         self.wink = WinkDetector()
+        self.blink = LongBlinkDetector()
         self.mouth = MouthScrollToggle()
         self.enabled = False
         self.last_time = None
@@ -112,6 +113,9 @@ class MainWindow(QMainWindow):
         self.last_cursor = None
         self.dwell_start = None
         self.dwell_fired = False
+        self.dwell_progress = 0.0
+        self.last_action = "Ninguno"
+        self.last_action_time = 0.0
         self.key_states = {}
         self.worker = None
         self._build_ui()
@@ -156,6 +160,10 @@ class MainWindow(QMainWindow):
         self.info = QLabel("Preparando detector facial…")
         self.info.setWordWrap(True)
         root.addWidget(self.info)
+        self.gesture_info = QLabel("Gestos: iniciando detector…")
+        self.gesture_info.setObjectName("subtitle")
+        self.gesture_info.setWordWrap(True)
+        root.addWidget(self.gesture_info)
 
         controls = QHBoxLayout()
         self.toggle_button = QPushButton("Activar control (F8)")
@@ -175,10 +183,14 @@ class MainWindow(QMainWindow):
         self.enable_winks = QCheckBox("Guiño de un ojo: clic izquierdo / derecho")
         self.enable_winks.setChecked(True)
         panel_layout.addWidget(self.enable_winks)
+        self.enable_blink = QCheckBox("Cerrar ambos ojos 0,5 s: clic izquierdo")
+        self.enable_blink.setChecked(True)
+        panel_layout.addWidget(self.enable_blink)
         self.enable_mouth = QCheckBox("Abrir la boca 1 segundo: alternar modo scroll")
         self.enable_mouth.setChecked(True)
         panel_layout.addWidget(self.enable_mouth)
-        self.enable_dwell = QCheckBox("Clic por permanencia (2 segundos, opcional)")
+        self.enable_dwell = QCheckBox("Clic por permanencia: dejar el cursor quieto 1,5 segundos")
+        self.enable_dwell.setChecked(True)
         panel_layout.addWidget(self.enable_dwell)
         self.invert_x = QCheckBox("Invertir movimiento horizontal")
         self.invert_x.setChecked(True)
@@ -243,7 +255,9 @@ class MainWindow(QMainWindow):
         self.toggle_button.setText("Activar control (F8)")
         self.head.calibrate()
         self.wink.reset()
+        self.blink.reset()
         self.mouth.scroll = False
+        self.reset_dwell()
         self.info.setText("Mira al frente con comodidad mientras se calibra el centro…")
 
     def toggle(self):
@@ -254,10 +268,9 @@ class MainWindow(QMainWindow):
             return
         self.enabled = not self.enabled
         self.wink.reset()
+        self.blink.reset()
         self.mouth.scroll = False
-        self.dwell_start = None
-        self.last_cursor = None
-        self.dwell_fired = False
+        self.reset_dwell()
         self.last_time = None
         self.toggle_button.setText("Pausar control (F8)" if self.enabled else "Activar control (F8)")
         if not self.enabled:
@@ -279,6 +292,9 @@ class MainWindow(QMainWindow):
         if pose is None:
             self.head.observe(None)
             self.wink.reset()
+            self.blink.reset()
+            self.reset_dwell()
+            self.gesture_info.setText("No hay rostro: clics desactivados.")
             if self.enabled and now - self.last_face > 1.0:
                 self.enabled = False
                 self.toggle_button.setText("Activar control (F8)")
@@ -294,24 +310,35 @@ class MainWindow(QMainWindow):
             self.info.setText(f"Calibrando posición neutral… {round(self.head.progress * 100)} %")
             self.last_time = now
             return
+        blend = packet["blend"]
+        left_eye = blend.get("eyeBlinkLeft", 0.0)
+        right_eye = blend.get("eyeBlinkRight", 0.0)
+        jaw = blend.get("jawOpen", 0.0)
+        self.show_gestures(left_eye, right_eye, jaw, now)
         if not self.enabled:
             self.info.setText("Rostro detectado. Pulsa F8 para empezar.")
             self.last_time = now
             return
-
-        blend = packet["blend"]
         if self.enable_mouth.isChecked():
             self.mouth.update(blend.get("jawOpen", 0.0), now)
         else:
             self.mouth.scroll = False
 
-        if self.enable_winks.isChecked():
-            gesture = self.wink.update(
-                blend.get("eyeBlinkLeft", 0.0),
-                blend.get("eyeBlinkRight", 0.0), now
-            )
+        long_blink_clicked = False
+        if self.enable_blink.isChecked():
+            long_blink_clicked = self.blink.update(left_eye, right_eye, now)
+            if long_blink_clicked:
+                self.wink.reset()
+                self.click_safe("left", "ojos cerrados")
+        else:
+            self.blink.reset()
+
+        both_closed = (left_eye >= self.blink.threshold and
+                       right_eye >= self.blink.threshold)
+        if self.enable_winks.isChecked() and not both_closed and not long_blink_clicked:
+            gesture = self.wink.update(left_eye, right_eye, now)
             if gesture:
-                self.click_safe(gesture)
+                self.click_safe(gesture, "guiño")
         else:
             self.wink.reset()
 
@@ -324,6 +351,7 @@ class MainWindow(QMainWindow):
             if scroll:
                 pyautogui.scroll(scroll)
             self.check_dwell(now)
+            self.show_gestures(left_eye, right_eye, jaw, now)
         except pyautogui.FailSafeException:
             self.enabled = False
             self.toggle_button.setText("Activar control (F8)")
@@ -336,21 +364,48 @@ class MainWindow(QMainWindow):
 
         self.info.setText(
             "Control activo · " +
-            ("MODO SCROLL (boca abierta prolongadamente para salir)"
-             if self.mouth.scroll else "MODO CURSOR · Guiños para clic")
+            ("MODO SCROLL · abre la boca 1 segundo para salir"
+             if self.mouth.scroll else "MODO CURSOR · mantén quieto para clic")
         )
 
-    def click_safe(self, button):
+    def click_safe(self, button, source="gesto"):
+        if not self.enabled:
+            return
         try:
             pyautogui.click(button=button)
+            kind = "izquierdo" if button == "left" else "derecho"
+            self.last_action = f"Clic {kind} por {source}"
+            self.last_action_time = time.monotonic()
+            self.reset_dwell()
+            if source != "permanencia":
+                self.dwell_fired = True
         except pyautogui.FailSafeException:
             self.enabled = False
             self.toggle_button.setText("Activar control (F8)")
+            self.info.setText("Parada de emergencia activada.")
+        except Exception as exc:
+            self.enabled = False
+            self.toggle_button.setText("Activar control (F8)")
+            self.info.setText(f"No se pudo hacer clic: {exc}")
+
+    def reset_dwell(self):
+        self.dwell_start = None
+        self.last_cursor = None
+        self.dwell_fired = False
+        self.dwell_progress = 0.0
+
+    def show_gestures(self, left_eye, right_eye, jaw, now):
+        progress = round(self.dwell_progress * 100)
+        action = (f" · Última acción: {self.last_action}"
+                  if now - self.last_action_time < 6.0 else "")
+        self.gesture_info.setText(
+            f"Ojos: izq. {left_eye:.2f} · der. {right_eye:.2f} · "
+            f"Boca {jaw:.2f} · Permanencia {progress} %{action}"
+        )
 
     def check_dwell(self, now):
         if not self.enable_dwell.isChecked() or self.mouth.scroll:
-            self.dwell_start = None
-            self.last_cursor = None
+            self.reset_dwell()
             return
         position = pyautogui.position()
         if self.last_cursor is None:
@@ -361,9 +416,15 @@ class MainWindow(QMainWindow):
         if distance > 28:
             self.last_cursor, self.dwell_start = position, now
             self.dwell_fired = False
-        elif not self.dwell_fired and now - self.dwell_start >= 2.0:
-            self.click_safe("left")
-            self.dwell_fired = True
+            self.dwell_progress = 0.0
+        elif not self.dwell_fired:
+            self.dwell_progress = min(1.0, (now - self.dwell_start) / 1.5)
+            if self.dwell_progress >= 1.0:
+                self.click_safe("left", "permanencia")
+                self.last_cursor = position
+                self.dwell_start = now
+                self.dwell_fired = True
+                self.dwell_progress = 1.0
 
     def poll_hotkeys(self):
         if os.name != "nt":
