@@ -277,8 +277,7 @@ class MainWindow(QMainWindow):
             self.info.setText("Control pausado.")
 
     def manual_click(self, button):
-        if self.enabled:
-            pyautogui.click(button=button)
+        self.click_safe(button, "botón de prueba")
 
     def on_problem(self, message):
         self.enabled = False
@@ -342,6 +341,9 @@ class MainWindow(QMainWindow):
         else:
             self.wink.reset()
 
+        if not self.enabled:
+            return
+
         dt = 0.033 if self.last_time is None else min(max(now - self.last_time, 0.001), 0.12)
         self.last_time = now
         dx, dy, scroll = self.head.move(pose, dt, scrolling=self.mouth.scroll)
@@ -362,6 +364,8 @@ class MainWindow(QMainWindow):
             self.info.setText("Movimiento detenido por error: " + str(exc))
             return
 
+        if not self.enabled:
+            return
         self.info.setText(
             "Control activo · " +
             ("MODO SCROLL · abre la boca 1 segundo para salir"
