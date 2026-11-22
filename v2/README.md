@@ -7,9 +7,11 @@ Versión experimental del proyecto destinada a controlar Windows con movimientos
 - Seguimiento continuo de la cabeza con MediaPipe Face Landmarker.
 - Calibración del centro mirando al frente (30 fotogramas).
 - Movimiento suave por velocidad, con zona muerta, sensibilidad y velocidad configurables.
-- Guiño del ojo izquierdo = clic izquierdo; guiño del ojo derecho = clic derecho.
+- Guiño del ojo izquierdo = clic izquierdo; guiño del ojo derecho = clic derecho (sensible a la cámara y a la persona).
+- Mantener ambos ojos cerrados intencionalmente durante unos 0,5 segundos y abrirlos = clic izquierdo (un parpadeo normal no basta).
 - Mantener la boca abierta aproximadamente 1 segundo = activar/desactivar modo scroll.
-- Alternativa opcional: clic izquierdo por permanencia del cursor durante 2 segundos.
+- Clic izquierdo por permanencia del cursor durante 1,5 segundos, **activado por defecto**. Se hace un solo clic hasta mover el cursor a otra posición.
+- Indicadores en vivo de las probabilidades de ojo izquierdo, ojo derecho, apertura de boca, progreso de permanencia y última acción.
 - Pausa global F8 y recalibración global F9 en Windows.
 - Parada al perder el rostro y parada de emergencia de PyAutoGUI.
 
@@ -41,10 +43,12 @@ Si no tienes Python 3.12, utiliza `py -3.11` o el comando `python` correspondien
 1. Colócate frente a la cámara. Durante los primeros 30 fotogramas mantén una posición neutral.
 2. Pulsa **F8** o el botón «Activar control».
 3. Mueve la cabeza a derecha/izquierda o arriba/abajo para desplazar el cursor, y vuelve al centro para detenerlo.
-4. Guiña un ojo brevemente para hacer clic. Ambos ojos cerrados a la vez no generan clic.
-5. Para hacer scroll, mantén la boca abierta alrededor de 1 segundo; repite el gesto para regresar al modo cursor.
-6. Si el centro quedó mal calibrado, pulsa **F9** y mira al frente.
-7. Para pausar desde cualquier programa, pulsa **F8**.
+4. Para asegurar un primer clic, coloca el cursor sobre un botón y **déjalo quieto 1,5 segundos**: verás el progreso de «Permanencia» hasta 100 %. Por defecto esta modalidad está activada.
+5. También puedes mantener ambos ojos cerrados alrededor de 0,5 segundos y abrirlos para un clic izquierdo. Los guiños individuales hacen clic izquierdo/derecho si MediaPipe puede distinguirlos.
+6. Si no funcionan los gestos, mira los valores de «Ojos» en la interfaz. Los valores cercanos a 1.0 indican mayor probabilidad de ojo cerrado. Si al guiñar un ojo ambos valores cambian a la vez, usa el clic por permanencia.
+7. Para hacer scroll, mantén la boca abierta alrededor de 1 segundo; repite el gesto para regresar al modo cursor.
+8. Si el centro quedó mal calibrado, pulsa **F9** y mira al frente.
+9. Para pausar desde cualquier programa, pulsa **F8**.
 
 El archivo `v2/assets/face_landmarker.task` no se incluye en el repositorio; `download_model.py` lo descarga desde el alojamiento oficial de MediaPipe. Su licencia y uso corresponden a sus respectivos titulares.
 
@@ -82,3 +86,9 @@ Las pruebas automatizadas comprueban lógica matemática y gestos, **no** el fun
 - Los umbrales de guiño y apertura de boca son valores iniciales, no mediciones validadas.
 - El movimiento utiliza control relativo (tipo joystick), no seguimiento exacto de la mirada.
 - La pausa global F8/F9 y la automatización de Windows se diseñaron para un equipo Windows; otras plataformas no están verificadas.
+
+## Diagnóstico de clics
+
+La interfaz muestra las señales `Ojos: izq. / der.` y `Permanencia`. Si las señales de ambos ojos nunca se acercan a 0,55 al cerrar los ojos, utiliza el modo por permanencia o ajusta los umbrales de detección en `engine.py` después de tomar mediciones. El movimiento del cursor puede funcionar perfectamente aunque el reconocimiento de gestos falle.
+
+Comprueba siempre el clic en un botón inofensivo antes de intentar manejar otras aplicaciones. Si el clic por permanencia tampoco funciona, observa si el progreso llega a 100 %. Si llega a 100 % y no hace clic, puede tratarse de un problema de automatización de Windows o de permisos del programa de destino. PyAutoGUI no siempre puede controlar ventanas elevadas con privilegios de administrador desde un proceso sin esos privilegios.
