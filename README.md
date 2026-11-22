@@ -1,3 +1,5 @@
+> **Versión 2 en desarrollo:** control continuo con MediaPipe, clics mediante gestos y scroll. Consulta [v2/README.md](v2/README.md) para instalar y probar la nueva aplicación. La versión original con Teachable Machine se conserva abajo para referencia académica.
+
 # HeadControl AI
 
 HeadControl AI es un prototipo de interacción humano-computadora que permite controlar el cursor mediante movimientos de la cabeza.
