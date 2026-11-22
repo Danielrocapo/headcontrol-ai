@@ -1,6 +1,6 @@
 import unittest
 
-from v2.engine import HeadController, MouthScrollToggle, PoseSample, WinkDetector, relative_pose
+from v2.engine import HeadController, MouthScrollToggle, PoseSample, WinkDetector, LongBlinkDetector, relative_pose
 
 
 class HeadControlTests(unittest.TestCase):
@@ -48,6 +48,25 @@ class HeadControlTests(unittest.TestCase):
         self.assertEqual(wink.update(0.0, 0.0, 1.3), "left")
         self.assertIsNone(wink.update(0.9, 0.1, 1.5))
         self.assertIsNone(wink.update(0.0, 0.0, 1.8))
+
+    def test_long_blink_ignores_normal_blink(self):
+        blink = LongBlinkDetector()
+        self.assertFalse(blink.update(0.8, 0.9, 1.0))
+        self.assertFalse(blink.update(0.1, 0.1, 1.2))
+
+    def test_long_blink_clicks_once_after_release(self):
+        blink = LongBlinkDetector()
+        self.assertFalse(blink.update(0.8, 0.9, 1.0))
+        self.assertFalse(blink.update(0.85, 0.88, 1.5))
+        self.assertTrue(blink.update(0.1, 0.1, 1.6))
+        self.assertFalse(blink.update(0.1, 0.1, 1.7))
+        self.assertFalse(blink.update(0.8, 0.9, 1.8))
+        self.assertFalse(blink.update(0.1, 0.1, 2.4))
+
+    def test_long_blink_ignores_excessive_hold(self):
+        blink = LongBlinkDetector()
+        blink.update(0.9, 0.9, 1.0)
+        self.assertFalse(blink.update(0.0, 0.0, 4.0))
 
     def test_open_mouth_toggles_scroll_after_one_second(self):
         mouth = MouthScrollToggle()
