@@ -99,7 +99,7 @@ class HeadController:
 class WinkDetector:
     """Requiere un solo ojo cerrado intencionalmente y luego soltar el guiño."""
 
-    def __init__(self, threshold=0.7, other_max=0.38, min_hold=0.17, cooldown=0.95):
+    def __init__(self, threshold=0.58, other_max=0.40, min_hold=0.18, cooldown=0.95):
         self.threshold = threshold
         self.other_max = other_max
         self.min_hold = min_hold
@@ -155,4 +155,36 @@ class MouthScrollToggle:
         else:
             self.started = None
             self.armed = True
+        return False
+
+
+class LongBlinkDetector:
+    """Clic al mantener ambos ojos cerrados voluntariamente y volver a abrirlos.
+
+    Un parpadeo normal, que dura menos que min_hold, no produce un clic.
+    """
+
+    def __init__(self, threshold=0.55, min_hold=0.48, max_hold=2.0, cooldown=1.1):
+        self.threshold = threshold
+        self.min_hold = min_hold
+        self.max_hold = max_hold
+        self.cooldown = cooldown
+        self.started = None
+        self.last_click = float("-inf")
+
+    def reset(self):
+        self.started = None
+
+    def update(self, left, right, now):
+        if left >= self.threshold and right >= self.threshold:
+            if self.started is None:
+                self.started = now
+            return False
+        if self.started is None:
+            return False
+        elapsed = now - self.started
+        self.started = None
+        if self.min_hold <= elapsed <= self.max_hold and now - self.last_click >= self.cooldown:
+            self.last_click = now
+            return True
         return False
