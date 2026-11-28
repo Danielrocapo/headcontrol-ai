@@ -1,10 +1,46 @@
+# Python and local tools
 __pycache__/
 *.py[cod]
-*.pyo
 .venv/
+.venv-*/
 venv/
-env/
-.vscode/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .idea/
+.vscode/
+.env
+.env.*
+# Android/Windows build outputs
+.gradle/
+build/
+build-*/
+dist/
+dist-*/
+local.properties
+*.apk
+*.aab
+*.exe
+*.zip
+*.spec
+# Captures, private calibration and training outputs
+*.csv
+*.jsonl
+*.log
+*.pt
+*.pth
+*.joblib
+*.ckpt
+capture/
+captures/
+capturas/
+datasets/
+runs/
+calibration_profiles/
+coverage2d_profiles/
+reach_profiles/
+pointer_trace*
+*.tmp
+# OS
 .DS_Store
 Thumbs.db

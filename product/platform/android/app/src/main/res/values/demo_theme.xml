@@ -1,0 +1,13 @@
+<resources>
+    <style name="HeadControlDemo" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#0c1422</item>
+        <item name="android:colorAccent">#78b8ff</item>
+        <item name="android:colorButtonNormal">#223753</item>
+        <item name="android:textColorPrimary">#edf4ff</item>
+        <item name="android:textColorSecondary">#afc1da</item>
+        <item name="android:statusBarColor">#0c1422</item>
+        <item name="android:navigationBarColor">#0c1422</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>

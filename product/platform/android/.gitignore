@@ -1,0 +1,14 @@
+.gradle/
+build/
+build-portrait/
+build-global/
+build-responsive/
+build-neutral/
+build-tracking/
+build-performance/
+build-wink/
+build-edges/
+build-stable-pointer/
+build-precise-pointer/
+build-pointer-consensus/
+local.properties

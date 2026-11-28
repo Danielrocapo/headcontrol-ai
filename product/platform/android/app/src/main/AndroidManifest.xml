@@ -1,0 +1,26 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:tools="http://schemas.android.com/tools">
+  <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+  <uses-permission android:name="android.permission.CAMERA" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <uses-feature android:name="android.hardware.camera.front" android:required="true" />
+  <application android:label="HeadControl AI" android:allowBackup="false"
+               android:usesCleartextTraffic="false" android:theme="@style/HeadControlDemo">
+    <activity android:name=".MainActivity" android:exported="true" android:screenOrientation="portrait">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity>
+    <service android:name=".TrackingService" android:exported="false"
+             android:foregroundServiceType="camera" />
+    <service android:name=".PointerService" android:exported="true"
+             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+      <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
+      <meta-data android:name="android.accessibilityservice" android:resource="@xml/pointer_service" />
+    </service>
+  </application>
+</manifest>

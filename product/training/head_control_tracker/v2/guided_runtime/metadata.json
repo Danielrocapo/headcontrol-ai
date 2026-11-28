@@ -1,0 +1,29 @@
+{
+  "model": "D_mlp_9_guided",
+  "weights_sha256": "048ff6246b65a53a96a57db1a165c39c001afa4d2b06104046459a3101c102f3",
+  "onnx": "tracker_d_guided.onnx",
+  "onnx_sha256": "7f09506fbc0dceec3de6afa33b6ea48a9339c958b70879c255972120ae5c4852",
+  "normalizer_sha256": "de3bcfd0589b96cf5ca144e941db1e93193cb3eac6ed677b087a0f985d9956ed",
+  "features": [
+    "yaw_rel_deg",
+    "pitch_rel_deg",
+    "roll_rel_deg",
+    "nose_x_rel",
+    "nose_y_rel",
+    "chin_x_rel",
+    "chin_y_rel",
+    "face_center_dx",
+    "face_center_dy"
+  ],
+  "opset": 17,
+  "source_run": "20261127T032814Z_652ecf10",
+  "normalization": "external_frozen_TR-01",
+  "parity_frames": 722,
+  "parity_reserved_frames": 300,
+  "parity_probes": 257,
+  "max_abs_error": 1.7881393432617188e-07,
+  "mean_abs_error": 1.7998592838353034e-08,
+  "max_abs_error_px_1920x1080": 0.00034314393997192383,
+  "atol": 2e-06,
+  "onnxruntime": "1.20.1"
+}
