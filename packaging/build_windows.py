@@ -29,18 +29,16 @@ def main():
                  "PySide6.QtWebEngineCore", "IPython", "IPython.core", "jupyter"):
         cmd += ["--exclude-module", name]
     stdlib = set()
-    for folder in ("product/mvp", "product/training", "product/experiments", "prueba_ojos", "v2/assets"):
-        for file in sorted((ROOT / folder).rglob("*")):
-            if not file.is_file() or file.name.startswith("verify_") or file.suffix not in (".py", ".onnx", ".json", ".task"):
-                continue
-            if file.suffix == ".py":
-                for node in ast.walk(ast.parse(file.read_text(encoding="utf-8-sig"))):
-                    if isinstance(node, ast.Import):
-                        stdlib.update(alias.name.split(".")[0] for alias in node.names)
-                    elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
-                        stdlib.add(node.module.split(".")[0])
-            dest = file.parent.relative_to(ROOT).as_posix()
-            cmd += ["--add-data", f"{file}{os.pathsep}{dest}"]
+    for relative in (ROOT / "packaging/windows-runtime-files.txt").read_text(encoding="utf-8").splitlines():
+        file = ROOT / relative
+        if file.suffix == ".py":
+            for node in ast.walk(ast.parse(file.read_text(encoding="utf-8-sig"))):
+                if isinstance(node, ast.Import):
+                    stdlib.update(alias.name.split(".")[0] for alias in node.names)
+                elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+                    stdlib.add(node.module.split(".")[0])
+        dest = file.parent.relative_to(ROOT).as_posix()
+        cmd += ["--add-data", f"{file}{os.pathsep}{dest}"]
     for name in sorted(stdlib & sys.stdlib_module_names - {"tkinter"}):
         cmd += ["--hidden-import", name]
     cmd.append(str(ROOT / "packaging/windows_entry.py"))
