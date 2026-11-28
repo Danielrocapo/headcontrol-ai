@@ -1,0 +1,23 @@
+{
+  "model": "D_mlp_9",
+  "weights_sha256": "62e0568c156aa6d9cc10c0620a00d1b47412dda442ab57dea2c692dc5fce2a3c",
+  "onnx": "tracker_d.onnx",
+  "onnx_sha256": "f621ee5ad026eaf155d8e7df37b024fa6c1df893f534cf4cde9ef3dab95ab084",
+  "normalizer_sha256": "de3bcfd0589b96cf5ca144e941db1e93193cb3eac6ed677b087a0f985d9956ed",
+  "features": [
+    "yaw_rel_deg",
+    "pitch_rel_deg",
+    "roll_rel_deg",
+    "nose_x_rel",
+    "nose_y_rel",
+    "chin_x_rel",
+    "chin_y_rel",
+    "face_center_dx",
+    "face_center_dy"
+  ],
+  "opset": 17,
+  "parity_probes": 257,
+  "max_abs_error": 1.1920928955078125e-07,
+  "atol": 2e-06,
+  "onnxruntime": "1.20.1"
+}
